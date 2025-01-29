@@ -3,11 +3,13 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
+# default to attach to the DAG
 default_args = {
     'owner': 'airscholar',
     'start_date': datetime(2023, 9, 3, 10, 00)
 }
 
+# API call for new data
 def get_data():
     import requests
 
@@ -19,6 +21,7 @@ def get_data():
 
 def format_data(res):
     data = {}
+    
     location = res['location']
     data['id'] = uuid.uuid4()
     data['first_name'] = res['name']['first']
@@ -36,27 +39,35 @@ def format_data(res):
 
     return data
 
+# forward data to Kafka
 def stream_data():
     import json
     from kafka import KafkaProducer
     import time
     import logging
 
-    producer = KafkaProducer(bootstrap_servers=['broker:29092'], max_block_ms=5000)
+    producer = KafkaProducer(
+        bootstrap_servers=['broker:29092'],     # list of brokers to try forwarding message
+        max_block_ms=5000   # max time waiting if message cannot be delivered immediately
+    )
+    
     curr_time = time.time()
 
     while True:
-        if time.time() > curr_time + 60: #1 minute
+        # stream for a minute, log in case of error
+        if time.time() > curr_time + 60:
             break
         try:
             res = get_data()
             res = format_data(res)
 
             producer.send('users_created', json.dumps(res).encode('utf-8'))
+
         except Exception as e:
-            logging.error(f'An error occured: {e}')
+            logging.error(f'An error occurred: {e}')
             continue
 
+# entry point
 with DAG('user_automation',
          default_args=default_args,
          schedule_interval='@daily',

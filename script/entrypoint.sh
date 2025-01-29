@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# set of commands that Airflow runs to initialize the webserver
+
 set -e
 
 if [ -e "/opt/airflow/requirements.txt" ]; then
